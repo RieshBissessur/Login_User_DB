@@ -1,0 +1,4 @@
+/target
+AdminData/
+.vscode/
+Cargo.lock
