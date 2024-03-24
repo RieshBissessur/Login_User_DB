@@ -67,10 +67,18 @@ pub struct UserData {
 pub struct FullUserData {
     pub username: String,
     pub guid: u128,
-    pub reset_password: bool,
     pub email: Option<String>,
     pub avatar: Option<String>,
     pub password: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct UserDataUpdate {
+    pub username: String,
+    pub new_username: Option<String>,
+    pub email: Option<String>,
+    pub avatar: Option<String>,
+    pub session_key: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

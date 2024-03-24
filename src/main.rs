@@ -24,45 +24,7 @@ async fn main() {
         fs::create_dir("./Json/Users").expect("Failed to create User directory");
     }
 
-    let get_health = warp::get()
-    .and(warp::path("health"))
-    .and_then(handle_get_health);
-
-    let register_user = warp::post()
-        .and(warp::path("register"))
-        .and(warp::body::json())
-        .and_then(handle_register);
-
-    
-    let login = warp::post()
-        .and(warp::path("login"))
-        .and(warp::body::json())
-        .and_then(handle_login);
-
-    let get_user_data = warp::post()
-        .and(warp::path("user_data"))
-        .and(warp::body::json())
-        .and_then(handle_get_user_data);
-
-    let reset_request = warp::post()
-        .and(warp::path("reset_request"))
-        .and(warp::body::json())
-        .and_then(request_password_reset);
-
-    let otp_check = warp::post()
-        .and(warp::path("check_otp"))
-        .and(warp::body::json())
-        .and_then(check_otp);
-
-    // Combine filters and run the server
-    let routes = register_user
-        .or(login)
-        .or(get_user_data)
-        .or(reset_request)
-        .or(otp_check)
-        .or(get_health)
-        .recover(handle_custom_rejection);
-    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
+    add_routes().await;
 }
 
 async fn handle_get_health() -> Result<impl Reply, Rejection> {
@@ -118,7 +80,6 @@ async fn handle_register(user_data: RegisterUser) -> Result<impl Reply, Rejectio
         email: Some(user_data.email),
         guid,
         avatar: None,
-        reset_password: false,
     };
 
     match write_user_data(full_user_data){
@@ -170,7 +131,7 @@ async fn handle_login(login: LoginRequest) -> Result<impl Reply, Rejection> {
     }
 }
 
-async fn handle_get_user_data(requset_data: UserDataRequest) -> Result<impl Reply, Rejection> {
+async fn handle_user_data_retrieval(requset_data: UserDataRequest) -> Result<impl Reply, Rejection> {
     let session_data = match read_session_data(&requset_data.username){
         Ok(session_data) => session_data,
         Err(_) => return Err(reject::custom(CustomRejection("Can not read authentication key".to_string()))),
@@ -190,7 +151,46 @@ async fn handle_get_user_data(requset_data: UserDataRequest) -> Result<impl Repl
             avatar: user_data.avatar,
         };
 
-        Ok(warp::reply::json(&user))
+        return Ok(warp::reply::json(&user))
+    }
+}
+
+async fn handle_user_data_update(requset_data: UserDataUpdate) -> Result<impl Reply, Rejection> {
+    let session_data = match read_session_data(&requset_data.username){
+        Ok(session_data) => session_data,
+        Err(_) => return Err(reject::custom(CustomRejection("Can not read authentication key".to_string()))),
+    };
+
+    if session_data.session_key != requset_data.session_key {
+        return Err(reject::custom(CustomRejection("Incorrect authentication key".to_string())))
+    } else {
+        let user_data: FullUserData = match read_user_data(&requset_data.username){
+            Ok(user_data) => user_data,
+            Err(_) => return Err(reject::custom(CustomRejection("Unable to read to user data".to_string()))),
+        };
+
+        let new_user = match requset_data.new_username{
+            Some(new_user) => new_user,
+            None => user_data.username,
+        };
+
+        let email = match requset_data.email{
+            Some(email) => Some(email),
+            None => user_data.email,
+        };
+
+        let avatar = match requset_data.avatar{
+            Some(avatar) => Some(avatar),
+            None => user_data.avatar,
+        };
+
+        let user = UserData {
+            username: new_user,
+            email: email,
+            avatar: avatar,
+        };
+
+        return Ok(warp::reply::json(&user))
     }
 }
 
@@ -260,4 +260,52 @@ async fn check_otp(req: OTPSubmit) -> Result<impl Reply, Rejection> {
     } else {
         return Ok(warp::reply::json(&format!("OTP invalid or expired")));
     }
+}
+
+async fn add_routes(){
+    let get_health = warp::get()
+    .and(warp::path("health"))
+    .and_then(handle_get_health);
+
+    let register_user = warp::post()
+        .and(warp::path("register"))
+        .and(warp::body::json())
+        .and_then(handle_register);
+    
+    let login = warp::post()
+        .and(warp::path("login"))
+        .and(warp::body::json())
+        .and_then(handle_login);
+
+    let retrieve_user_data = warp::post()
+        .and(warp::path("user_data"))
+        .and(warp::body::json())
+        .and_then(handle_user_data_retrieval);
+
+    let reset_request = warp::post()
+        .and(warp::path("reset_request"))
+        .and(warp::body::json())
+        .and_then(request_password_reset);
+
+    let otp_check = warp::post()
+        .and(warp::path("check_otp"))
+        .and(warp::body::json())
+        .and_then(check_otp);
+
+    let update_user_data = warp::post()
+        .and(warp::path("update_user_data"))
+        .and(warp::body::json())
+        .and_then(handle_user_data_update);
+
+    // Combine filters and run the server
+    let routes = register_user
+        .or(login)
+        .or(retrieve_user_data)
+        .or(update_user_data)
+        .or(reset_request)
+        .or(otp_check)
+        .or(get_health)
+        .recover(handle_custom_rejection);
+
+    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }
