@@ -1,5 +1,5 @@
 [package]
-name = "monolith"
+name = "login_user_db"
 version = "0.1.0"
 edition = "2021"
 
